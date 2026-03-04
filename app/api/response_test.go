@@ -23,7 +23,7 @@ func TestOKResponse(t *testing.T) {
 		assert.Equal(t, http.StatusOK, recorder.Code, "Expected status code 200 OK")
 		assert.Equal(t, "application/json", recorder.Header().Get("Content-Type"), "Expected Content-Type to be application/json")
 
-		expected := `{"message":"Success"}`
+		expected := `{"data":{"message":"Success"}}`
 		assert.JSONEq(t, expected, recorder.Body.String(), "Response body does not match expected")
 	})
 }

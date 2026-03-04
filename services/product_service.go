@@ -18,5 +18,16 @@ func (s *ProductService) GetCatalog(categoryCode string, priceLessThan *float64,
 }
 
 func (s *ProductService) GetProductDetail(code string) (*models.Product, error) {
-	return s.repo.FindByCode(code)
+	product, err := s.repo.FindByCode(code)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range product.Variants {
+		if product.Variants[i].Price.IsZero() {
+			product.Variants[i].Price = product.Price
+		}
+	}
+
+	return product, nil
 } 

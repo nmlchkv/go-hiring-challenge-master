@@ -2,8 +2,8 @@ package services
 
 import (
 	"testing"
+
 	"github.com/mytheresa/go-hiring-challenge/models"
-	"github.com/mytheresa/go-hiring-challenge/repositories"
 	"github.com/shopspring/decimal"
 )
 

@@ -2,12 +2,23 @@ package variants
 
 import (
 	"net/http"
-	"github.com/gorilla/mux"
-	"github.com/mytheresa/go-hiring-challenge/services"
+
 	"github.com/mytheresa/go-hiring-challenge/app/api"
+	"github.com/mytheresa/go-hiring-challenge/models"
+	"gorm.io/gorm"
 )
 
+type ProductDetailService interface {
+	GetProductDetail(code string) (*models.Product, error)
+}
+
+type Category struct {
+	Code string `json:"code"`
+	Name string `json:"name"`
+}
+
 type Variant struct {
+	ID    uint    `json:"id"`
 	Name  string  `json:"name"`
 	SKU   string  `json:"sku"`
 	Price float64 `json:"price"`
@@ -16,43 +27,54 @@ type Variant struct {
 type ProductDetail struct {
 	Code     string    `json:"code"`
 	Price    float64   `json:"price"`
-	Category string    `json:"category"`
+	Category Category  `json:"category"`
 	Variants []Variant `json:"variants"`
 }
 
 type Handler struct {
-	service *services.ProductService
+	service ProductDetailService
 }
 
-func NewHandler(s *services.ProductService) *Handler {
+func NewHandler(s ProductDetailService) *Handler {
 	return &Handler{service: s}
 }
 
 func (h *Handler) HandleGet(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	code := vars["id"]
-	product, err := h.service.GetProductDetail(code)
-	if err != nil {
-		api.ErrorResponse(w, http.StatusNotFound, "Product not found")
+	code := r.PathValue("id")
+	if code == "" {
+		api.ErrorResponse(w, http.StatusBadRequest, "missing id")
 		return
 	}
+
+	product, err := h.service.GetProductDetail(code)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			api.ErrorResponse(w, http.StatusNotFound, "product not found")
+			return
+		}
+		api.ErrorResponse(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
 	variants := make([]Variant, len(product.Variants))
 	for i, v := range product.Variants {
-		price := v.Price.InexactFloat64()
-		if price == 0 {
-			price = product.Price.InexactFloat64()
-		}
 		variants[i] = Variant{
+			ID:    v.ID,
 			Name:  v.Name,
 			SKU:   v.SKU,
-			Price: price,
+			Price: v.Price.InexactFloat64(),
 		}
 	}
+
 	resp := ProductDetail{
-		Code:     product.Code,
-		Price:    product.Price.InexactFloat64(),
-		Category: product.Category.Name,
+		Code:  product.Code,
+		Price: product.Price.InexactFloat64(),
+		Category: Category{
+			Code: product.Category.Code,
+			Name: product.Category.Name,
+		},
 		Variants: variants,
 	}
+
 	api.OKResponse(w, resp)
-} 
+}

@@ -13,7 +13,6 @@ import (
 	"github.com/mytheresa/go-hiring-challenge/app/catalog"
 	"github.com/mytheresa/go-hiring-challenge/app/database"
 	"github.com/mytheresa/go-hiring-challenge/app/variants"
-	"github.com/mytheresa/go-hiring-challenge/models"
 	"github.com/mytheresa/go-hiring-challenge/repositories"
 	"github.com/mytheresa/go-hiring-challenge/services"
 )

@@ -4,4 +4,4 @@ CREATE TABLE IF NOT EXISTS categories (
     name VARCHAR(64) NOT NULL
 );
 
-ALTER TABLE products ADD COLUMN IF NOT EXISTS category_id INTEGER NOT NULL REFERENCES categories(id); 
+ALTER TABLE products ADD COLUMN IF NOT EXISTS category_id INTEGER REFERENCES categories(id);

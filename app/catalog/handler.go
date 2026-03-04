@@ -1,76 +1,113 @@
 package catalog
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
+	"strconv"
 
-	"github.com/mytheresa/go-hiring-challenge/services"
 	"github.com/mytheresa/go-hiring-challenge/app/api"
+	"github.com/mytheresa/go-hiring-challenge/models"
 )
 
-type Response struct {
-	Products []Product `json:"products"`
-	Total    int64     `json:"total"`
+type CatalogService interface {
+	GetCatalog(categoryCode string, priceLessThan *float64, offset, limit int) ([]models.Product, int64, error)
 }
 
-type Product struct {
-	Code     string  `json:"code"`
-	Price    float64 `json:"price"`
-	Category string  `json:"category"`
+type Category struct {
+	Code string `json:"code"`
+	Name string `json:"name"`
+}
+
+type ProductSummary struct {
+	Code     string   `json:"code"`
+	Price    float64  `json:"price"`
+	Category Category `json:"category"`
+}
+
+type Response struct {
+	Items []ProductSummary `json:"items"`
+	Total int64            `json:"total"`
 }
 
 type CatalogHandler struct {
-	service *services.ProductService
+	service CatalogService
 }
 
-func NewCatalogHandler(s *services.ProductService) *CatalogHandler {
+func NewCatalogHandler(s CatalogService) *CatalogHandler {
 	return &CatalogHandler{
 		service: s,
 	}
 }
 
-func (h *CatalogHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
-	// Параметры пагинации и фильтрации
+func parseQueryParams(r *http.Request) (offset, limit int, category string, priceLessThan *float64, errMsg string, status int) {
 	q := r.URL.Query()
-	offset := 0
-	limit := 10
-	category := q.Get("category")
-	priceLessThan := q.Get("priceLessThan")
+
+	offset = 0
+	limit = 10
+
 	if v := q.Get("offset"); v != "" {
-		fmt.Sscanf(v, "%d", &offset)
+		parsed, err := strconv.Atoi(v)
+		if err != nil || parsed < 0 {
+			return 0, 0, "", nil, "invalid offset", http.StatusBadRequest
+		}
+		offset = parsed
 	}
+
 	if v := q.Get("limit"); v != "" {
-		fmt.Sscanf(v, "%d", &limit)
+		parsed, err := strconv.Atoi(v)
+		if err != nil {
+			return 0, 0, "", nil, "invalid limit", http.StatusBadRequest
+		}
+		if parsed < 1 || parsed > 100 {
+			return 0, 0, "", nil, "limit must be in [1; 100]", http.StatusBadRequest
+		}
+		limit = parsed
 	}
-	if limit < 1 {
-		limit = 1
+
+	category = q.Get("category")
+
+	if v := q.Get("priceLessThan"); v != "" {
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return 0, 0, "", nil, "invalid priceLessThan", http.StatusBadRequest
+		}
+		if f <= 0 {
+			return 0, 0, "", nil, "priceLessThan must be > 0", http.StatusBadRequest
+		}
+		priceLessThan = &f
 	}
-	if limit > 100 {
-		limit = 100
-	}
-	var pricePtr *float64
-	if priceLessThan != "" {
-		var f float64
-		fmt.Sscanf(priceLessThan, "%f", &f)
-		pricePtr = &f
-	}
-	products, total, err := h.service.GetCatalog(category, pricePtr, offset, limit)
-	if err != nil {
-		api.ErrorResponse(w, http.StatusInternalServerError, err.Error())
+
+	return offset, limit, category, priceLessThan, "", 0
+}
+
+func (h *CatalogHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
+	offset, limit, category, pricePtr, errMsg, status := parseQueryParams(r)
+	if errMsg != "" {
+		api.ErrorResponse(w, status, errMsg)
 		return
 	}
-	respProducts := make([]Product, len(products))
+
+	products, total, err := h.service.GetCatalog(category, pricePtr, offset, limit)
+	if err != nil {
+		api.ErrorResponse(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	respProducts := make([]ProductSummary, len(products))
 	for i, p := range products {
-		respProducts[i] = Product{
-			Code:     p.Code,
-			Price:    p.Price.InexactFloat64(),
-			Category: p.Category.Name,
+		respProducts[i] = ProductSummary{
+			Code:  p.Code,
+			Price: p.Price.InexactFloat64(),
+			Category: Category{
+				Code: p.Category.Code,
+				Name: p.Category.Name,
+			},
 		}
 	}
+
 	response := Response{
-		Products: respProducts,
-		Total:    total,
+		Items: respProducts,
+		Total: total,
 	}
+
 	api.OKResponse(w, response)
 }
